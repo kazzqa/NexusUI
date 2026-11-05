@@ -9,6 +9,8 @@ Inspired by modern libraries like Rayfield and Fluent.
 **Raw Link (for scripts):**
 ```text
 https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua
+```
+
 ## 🛠 Installation
 
 1. Create a new file in your script editor (e.g., `NexusUI.lua`).
@@ -21,7 +23,7 @@ https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua
 To load the library into your script, use:
 
 ```lua
-local NexusUI = loadstring(game:HttpGet("YOUR_RAW_URL_HERE"))()
+local NexusUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua"))()
 ```
 
 ## 🧩 UI Components
