@@ -1,6 +1,6 @@
 --[[ 
     NexusUI - UI Library for Roblox
-    V2.1 - Multi-tab support, clean destruction, resizable.
+    V2.2 - Fixed Tab Indicator resizing & ZIndex.
 ]]
 
 local NexusUI = {}
@@ -53,12 +53,12 @@ function NexusUI:CreateWindow(config)
     local self = setmetatable({}, Window)
     self.GUI_PARENT = getGuiParent()
     self.Connections = {}
+    self.CurrentTab = 1
     
     local old = self.GUI_PARENT:FindFirstChild("NexusUI_Menu")
     if old then old:Destroy() end
 
     self.MenuGui = new("ScreenGui", {Name = "NexusUI_Menu", ResetOnSpawn = false, DisplayOrder = 1000}, self.GUI_PARENT)
-    -- Увеличили стандартный размер окна, чтобы вкладки помещались
     self.FULL_SIZE = config.Size or UDim2.fromOffset(440, 480)
     self.MIN_SIZE = UDim2.fromOffset(self.FULL_SIZE.X.Offset, 58)
     self.Minimized = false
@@ -103,7 +103,8 @@ function NexusUI:CreateWindow(config)
     self.TabBar = new("Frame", {Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(12, 60), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0}, self.WindowFrame)
     corner(self.TabBar, 12)
 
-    self.TabIndicator = new("Frame", {Size = UDim2.new(1, -6, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = WHITE, BorderSizePixel = 0}, self.TabBar)
+    -- Инициализируем индикатор нулевого размера
+    self.TabIndicator = new("Frame", {Size = UDim2.new(0, 0, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 1}, self.TabBar)
     corner(self.TabIndicator, 9)
     gradient(self.TabIndicator, THEME.Accent, THEME.Accent2, 0)
     
@@ -177,10 +178,11 @@ function NexusUI:CreateWindow(config)
     function self:SelectTab(index)
         local numTabs = #self.Tabs
         if numTabs == 0 then return end
+        self.CurrentTab = index
+        
         for j, pg in ipairs(self.Tabs) do pg.Visible = (j == index) end
         for j, b in ipairs(self.TabButtons) do tween(b, 0.2, {TextColor3 = (j == index) and WHITE or THEME.SubText}) end
         
-        -- Автоматический расчет размера и позиции индикатора
         local widthScale = 1 / numTabs
         tween(self.TabIndicator, 0.25, {
             Size = UDim2.new(widthScale, -6, 1, -6),
@@ -200,10 +202,12 @@ function Window:AddTab(text)
     tab.Index = #self.TabButtons + 1
     local numTabs = tab.Index
     
+    -- Кнопка вкладки (ZIndex = 2, чтобы быть поверх индикатора)
     local b = new("TextButton", {
         Size = UDim2.new(1 / numTabs, 0, 1, 0), Position = UDim2.new((numTabs - 1) / numTabs, 0, 0, 0),
         BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold,
         TextSize = 12, TextColor3 = THEME.SubText, AutoButtonColor = false,
+        ZIndex = 2, TextYAlignment = Enum.TextYAlignment.Center
     }, self.TabBar)
     
     -- Подгоняем размеры всех предыдущих кнопок
@@ -225,6 +229,15 @@ function Window:AddTab(text)
     
     tab.Frame = sf
     table.insert(self.Tabs, sf)
+    
+    -- Пересчитываем индикатор при добавлении новой вкладки (без клика)
+    if self.CurrentTab then
+        local widthScale = 1 / numTabs
+        self.TabIndicator.Size = UDim2.new(widthScale, -6, 1, -6)
+        self.TabIndicator.Position = UDim2.new((self.CurrentTab - 1) * widthScale, 3, 0, 3)
+    end
+    
+    -- Если это первая вкладка, активируем её
     if tab.Index == 1 then self:SelectTab(1) end
     
     return tab
