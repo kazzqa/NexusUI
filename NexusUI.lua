@@ -184,36 +184,36 @@ local Tab = {}
 Tab.__index = Tab
 
 function Window:AddTab(text)
-    local self = setmetatable({}, Tab)
-    self.Owner = self
-    self.Index = #self.TabButtons + 1
+    local tab = setmetatable({}, Tab)
+    tab.Owner = self -- Окно
+    tab.Index = #self.TabButtons + 1
     
     local b = new("TextButton", {
-        Size = UDim2.new(1 / self.Index, 0, 1, 0), Position = UDim2.new((self.Index - 1) / self.Index, 0, 0, 0),
+        Size = UDim2.new(1 / tab.Index, 0, 1, 0), Position = UDim2.new((tab.Index - 1) / tab.Index, 0, 0, 0),
         BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold,
         TextSize = 12, TextColor3 = THEME.SubText, AutoButtonColor = false,
     }, self.TabBar)
     
     for i, btn in ipairs(self.TabButtons) do
-        tween(btn, 0.2, {Size = UDim2.new(1 / self.Index, 0, 1, 0), Position = UDim2.new((i - 1) / self.Index, 0, 0, 0)})
+        tween(btn, 0.2, {Size = UDim2.new(1 / tab.Index, 0, 1, 0), Position = UDim2.new((i - 1) / tab.Index, 0, 0, 0)})
     end
-    b.MouseButton1Click:Connect(function() self.Owner:SelectTab(self.Index) end)
-    table.insert(self.Owner.TabButtons, b)
+    b.MouseButton1Click:Connect(function() self:SelectTab(tab.Index) end)
+    table.insert(self.TabButtons, b)
     
     local sf = new("ScrollingFrame", {
         Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, BorderSizePixel = 0,
         ScrollBarThickness = 3, ScrollBarImageColor3 = THEME.Accent,
         CanvasSize = UDim2.new(), AutomaticCanvasSize = Enum.AutomaticSize.Y, Visible = false,
-    }, self.Owner.PagesHolder)
+    }, self.PagesHolder)
     
     new("UIPadding", {PaddingTop = UDim.new(0, 4), PaddingBottom = UDim.new(0, 14), PaddingLeft = UDim.new(0, 12), PaddingRight = UDim.new(0, 12)}, sf)
     new("UIListLayout", {Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, sf)
     
-    self.Frame = sf
-    table.insert(self.Owner.Tabs, sf)
-    if self.Index == 1 then self.Owner:SelectTab(1) end
+    tab.Frame = sf
+    table.insert(self.Tabs, sf)
+    if tab.Index == 1 then self:SelectTab(1) end
     
-    return self
+    return tab
 end
 
 local function nextOrder(page)
@@ -236,6 +236,37 @@ function Tab:AddButton(text, callback)
     stroke(btn, THEME.Line, 1, 0.5)
     hover(btn, THEME.Panel, THEME.Panel2)
     btn.MouseButton1Click:Connect(callback)
+end
+
+function Tab:AddMasterToggle(title, desc, callback)
+    local row = new("TextButton", {Size = UDim2.new(1, 0, 0, 64), BackgroundColor3 = WHITE, BorderSizePixel = 0, Text = "", AutoButtonColor = false, LayoutOrder = nextOrder(self)}, self.Frame)
+    corner(row, 14)
+    local g = new("UIGradient", {Rotation = 0}, row)
+    
+    new("TextLabel", {Size = UDim2.new(1, -80, 0, 22), Position = UDim2.fromOffset(16, 11), BackgroundTransparency = 1, Text = title, Font = Enum.Font.GothamBlack, TextSize = 17, TextColor3 = WHITE, TextXAlignment = Enum.TextXAlignment.Left}, row)
+    local sub = new("TextLabel", {Size = UDim2.new(1, -80, 0, 16), Position = UDim2.fromOffset(16, 34), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(230, 230, 245), TextXAlignment = Enum.TextXAlignment.Left, Text = desc}, row)
+    
+    local power = new("TextLabel", {Size = UDim2.fromOffset(40, 40), Position = UDim2.new(1, -54, 0.5, -20), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.7, Text = "⏻", Font = Enum.Font.GothamBold, TextSize = 22, TextColor3 = WHITE}, row)
+    corner(power, 20)
+
+    local state = false
+    local function update()
+        if state then
+            g.Color = ColorSequence.new(THEME.Accent, THEME.Accent2)
+            sub.Text = desc
+        else
+            g.Color = ColorSequence.new(Color3.fromRGB(62, 62, 84), Color3.fromRGB(42, 42, 58))
+            sub.Text = "Выключено"
+        end
+    end
+    update()
+
+    row.MouseButton1Click:Connect(function()
+        state = not state
+        update()
+        callback(state)
+        self.Owner:Notify(title .. (state and " включен" or " выключен"))
+    end)
 end
 
 function Tab:AddToggle(text, default, callback)
@@ -267,6 +298,7 @@ end
 
 function Tab:AddSlider(text, min, max, default, callback, suffix)
     local val = default or min
+    local step = (max - min) / 100
     local row = new("Frame", {Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0, LayoutOrder = nextOrder(self)}, self.Frame)
     corner(row, 12)
     stroke(row, THEME.Line, 1, 0.55)
@@ -297,7 +329,7 @@ function Tab:AddSlider(text, min, max, default, callback, suffix)
     local function setFromX(x)
         local a = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
         val = min + (max - min) * a
-        val = math.floor(val / (0.01) + 0.5) * 0.01 -- плавный шаг
+        val = math.floor(val / step + 0.5) * step
         val = math.clamp(val, min, max)
         render()
         callback(val)
@@ -345,7 +377,6 @@ function Tab:AddColorPicker(text, default, callback)
     end
 end
 
--- Универсальный список игроков (БЕЗ логики блэклиста, только UI)
 function Tab:AddPlayerList(getPlayers, isSelected, onSelect)
     local FriendsList = new("Frame", {Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y, BackgroundTransparency = 1, LayoutOrder = nextOrder(self)}, self.Frame)
     new("UIListLayout", {Padding = UDim.new(0, 6), SortOrder = Enum.SortOrder.LayoutOrder}, FriendsList)
@@ -376,7 +407,7 @@ function Tab:AddPlayerList(getPlayers, isSelected, onSelect)
         end
         
         local players = getPlayers()
-        table.sort(players, function(a, b) return string.lower(a.DisplayName) < string.lower(b.DisplayName) end)
+        table.sort(players, function(a, b) return string.lower(a.DisplayName or a.Name) < string.lower(b.DisplayName or b.Name) end)
 
         local idx = 1
         for _, p in ipairs(players) do
@@ -405,9 +436,6 @@ function Tab:AddPlayerList(getPlayers, isSelected, onSelect)
                 rebuild()
             end)
         end
-        
-        -- Если есть оффлайн игроки (переданные как строки или фейк-объекты)
-        -- Обрабатываем их отдельно, если нужно.
     end
 
     addBtn.MouseButton1Click:Connect(function()
@@ -418,14 +446,17 @@ function Tab:AddPlayerList(getPlayers, isSelected, onSelect)
             rebuild()
         end
     end)
-    box.FocusLost:Connect(function(enter) if enter then addBtn:GetPropertyChangedSignal("Text") -- фикс, просто вызовем клик
-        local text = box.Text:gsub("^%s+", ""):gsub("%s+$", "")
-        if text ~= "" then
-            onSelect({Name = text, DisplayName = text}, true)
-            box.Text = ""
-            rebuild()
-        end
-    end end)
+    
+    box.FocusLost:Connect(function(enter) 
+        if enter then 
+            local text = box.Text:gsub("^%s+", ""):gsub("%s+$", "")
+            if text ~= "" then
+                onSelect({Name = text, DisplayName = text}, true)
+                box.Text = ""
+                rebuild()
+            end
+        end 
+    end)
 
     Players.PlayerAdded:Connect(function() task.delay(0.3, rebuild) end)
     Players.PlayerRemoving:Connect(function() task.delay(0.1, rebuild) end)
