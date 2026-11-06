@@ -1,6 +1,6 @@
 --[[ 
     NexusUI - UI Library for Roblox
-    V2.3 - Expandable settings (RMB) & Rainbow Color Picker.
+    V2.4 - Restored MasterToggle & Fixed ZIndex.
 ]]
 
 local NexusUI = {}
@@ -252,23 +252,48 @@ function Tab:AddCard(height)
     return c
 end
 
--- НОВИНКА: Раскрывающийся тумблер по ПКМ (Правая кнопка мыши)
+-- ВОЗВРАЩАЕМ Master Toggle
+function Tab:AddMasterToggle(title, desc, callback)
+    local row = new("TextButton", {Size = UDim2.new(1, 0, 0, 64), BackgroundColor3 = WHITE, BorderSizePixel = 0, Text = "", AutoButtonColor = false, LayoutOrder = nextOrder(self)}, self.Frame)
+    corner(row, 14)
+    local g = new("UIGradient", {Rotation = 0}, row)
+    new("TextLabel", {Size = UDim2.new(1, -80, 0, 22), Position = UDim2.fromOffset(16, 11), BackgroundTransparency = 1, Text = title, Font = Enum.Font.GothamBlack, TextSize = 17, TextColor3 = WHITE, TextXAlignment = Enum.TextXAlignment.Left}, row)
+    local sub = new("TextLabel", {Size = UDim2.new(1, -80, 0, 16), Position = UDim2.fromOffset(16, 34), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(230, 230, 245), TextXAlignment = Enum.TextXAlignment.Left, Text = desc}, row)
+    local power = new("TextLabel", {Size = UDim2.fromOffset(40, 40), Position = UDim2.new(1, -54, 0.5, -20), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.7, Text = "⏻", Font = Enum.Font.GothamBold, TextSize = 22, TextColor3 = WHITE}, row)
+    corner(power, 20)
+
+    local state = false
+    local function update()
+        if state then
+            g.Color = ColorSequence.new(THEME.Accent, THEME.Accent2)
+            sub.Text = desc
+        else
+            g.Color = ColorSequence.new(Color3.fromRGB(62, 62, 84), Color3.fromRGB(42, 42, 58))
+            sub.Text = "Выключено"
+        end
+    end
+    update()
+    row.MouseButton1Click:Connect(function()
+        state = not state
+        update()
+        callback(state)
+        self.Owner:Notify(title .. (state and " вкл" or " выкл"))
+    end)
+end
+
+-- НОВИНКА: Раскрывающийся тумблер по ПКМ
 function Tab:AddExpandableToggle(text, default, callback, buildSettings)
     local state = default or false
     local expanded = false
     
-    -- Главная панель
     local container = new("Frame", {Size = UDim2.new(1, 0, 0, 48), BackgroundTransparency = 1, LayoutOrder = nextOrder(self)}, self.Frame)
     
     local row = new("Frame", {Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0}, container)
     corner(row, 12)
     stroke(row, THEME.Line, 1, 0.55)
     
-    local title = new("TextLabel", {Size = UDim2.new(1, -100, 0, 18), Position = UDim2.fromOffset(14, 7), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-    
-    -- Стрелочка для раскрытия
+    new("TextLabel", {Size = UDim2.new(1, -100, 0, 18), Position = UDim2.fromOffset(14, 7), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
     local arrow = new("TextLabel", {Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -90, 0.5, -10), BackgroundTransparency = 1, Text = "▼", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = THEME.SubText, Rotation = 0}, row)
-    
     local pill = new("TextButton", {Size = UDim2.fromOffset(46, 26), Position = UDim2.new(1, -60, 0.5, -13), Text = "", AutoButtonColor = false, BackgroundColor3 = WHITE}, row)
     corner(pill, 13)
     local pg = new("UIGradient", {Rotation = 0}, pill)
@@ -288,7 +313,6 @@ function Tab:AddExpandableToggle(text, default, callback, buildSettings)
         callback(state)
     end)
 
-    -- Подменю настроек
     local settingsFrame = new("Frame", {
         Size = UDim2.new(1, -20, 0, 0), Position = UDim2.fromOffset(10, 48),
         BackgroundColor3 = THEME.Panel2, BorderSizePixel = 0, Visible = false,
@@ -302,13 +326,12 @@ function Tab:AddExpandableToggle(text, default, callback, buildSettings)
         settingsFrame.Visible = expanded
         tween(arrow, 0.2, {Rotation = expanded and 180 or 0})
         if expanded then
-            container.Size = UDim2.new(1, 0, 0, 48 + settingsFrame.UIListLayout.AbsoluteContentSize.Y + 12)
+            container.Size = UDim2.new(1, 0, 0, 48 + settingsLayout.AbsoluteContentSize.Y + 12)
         else
             container.Size = UDim2.new(1, 0, 0, 48)
         end
     end
 
-    -- Клик по стрелке или ПКМ по строке раскрывает меню
     arrow.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then toggleExpand() end
     end)
@@ -316,12 +339,8 @@ function Tab:AddExpandableToggle(text, default, callback, buildSettings)
         if input.UserInputType == Enum.UserInputType.MouseButton2 then toggleExpand() end
     end)
     
-    -- Заполняем подменю элементами
-    if buildSettings then
-        buildSettings(settingsFrame)
-    end
+    if buildSettings then buildSettings(settingsFrame) end
     
-    -- Авто-обновление размера контейнера, если внутри что-то меняется
     settingsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
         if expanded then
             container.Size = UDim2.new(1, 0, 0, 48 + settingsLayout.AbsoluteContentSize.Y + 12)
@@ -355,7 +374,6 @@ function Tab:AddToggle(text, default, callback)
     end)
 end
 
--- Обновленный слайдер для вложенных меню (с автоматическим LayoutOrder)
 function Tab:AddSlider(text, min, max, default, callback, suffix, parent)
     local val = default or min
     local step = (max - min) / 100
@@ -435,7 +453,6 @@ function Tab:AddColorPicker(text, default, callback, parent)
         corner(b, 11)
         
         if c == "Rainbow" then
-            -- Радиальный градиент для радуги
             local grad = Instance.new("UIGradient", b)
             grad.Color = ColorSequence.new({
                 ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
