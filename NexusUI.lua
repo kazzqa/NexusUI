@@ -1,6 +1,6 @@
 --[[ 
     NexusUI - UI Library for Roblox
-    V2.2 - Fixed Tab Indicator resizing & ZIndex.
+    V2.3 - Expandable settings (RMB) & Rainbow Color Picker.
 ]]
 
 local NexusUI = {}
@@ -103,7 +103,6 @@ function NexusUI:CreateWindow(config)
     self.TabBar = new("Frame", {Size = UDim2.new(1, -24, 0, 36), Position = UDim2.fromOffset(12, 60), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0}, self.WindowFrame)
     corner(self.TabBar, 12)
 
-    -- Инициализируем индикатор нулевого размера
     self.TabIndicator = new("Frame", {Size = UDim2.new(0, 0, 1, -6), Position = UDim2.new(0, 3, 0, 3), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 1}, self.TabBar)
     corner(self.TabIndicator, 9)
     gradient(self.TabIndicator, THEME.Accent, THEME.Accent2, 0)
@@ -202,7 +201,6 @@ function Window:AddTab(text)
     tab.Index = #self.TabButtons + 1
     local numTabs = tab.Index
     
-    -- Кнопка вкладки (ZIndex = 2, чтобы быть поверх индикатора)
     local b = new("TextButton", {
         Size = UDim2.new(1 / numTabs, 0, 1, 0), Position = UDim2.new((numTabs - 1) / numTabs, 0, 0, 0),
         BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold,
@@ -210,7 +208,6 @@ function Window:AddTab(text)
         ZIndex = 2, TextYAlignment = Enum.TextYAlignment.Center
     }, self.TabBar)
     
-    -- Подгоняем размеры всех предыдущих кнопок
     for i, btn in ipairs(self.TabButtons) do
         tween(btn, 0.2, {Size = UDim2.new(1 / numTabs, 0, 1, 0), Position = UDim2.new((i - 1) / numTabs, 0, 0, 0)})
     end
@@ -229,15 +226,6 @@ function Window:AddTab(text)
     
     tab.Frame = sf
     table.insert(self.Tabs, sf)
-    
-    -- Пересчитываем индикатор при добавлении новой вкладки (без клика)
-    if self.CurrentTab then
-        local widthScale = 1 / numTabs
-        self.TabIndicator.Size = UDim2.new(widthScale, -6, 1, -6)
-        self.TabIndicator.Position = UDim2.new((self.CurrentTab - 1) * widthScale, 3, 0, 3)
-    end
-    
-    -- Если это первая вкладка, активируем её
     if tab.Index == 1 then self:SelectTab(1) end
     
     return tab
@@ -257,14 +245,6 @@ function Tab:AddSection(text)
     }, self.Frame)
 end
 
-function Tab:AddButton(text, callback)
-    local btn = new("TextButton", {Size = UDim2.new(1, 0, 0, 40), BackgroundColor3 = THEME.Panel, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, AutoButtonColor = false, LayoutOrder = nextOrder(self)}, self.Frame)
-    corner(btn, 10)
-    stroke(btn, THEME.Line, 1, 0.5)
-    hover(btn, THEME.Panel, THEME.Panel2)
-    btn.MouseButton1Click:Connect(callback)
-end
-
 function Tab:AddCard(height)
     local c = new("Frame", {Size = UDim2.new(1, 0, 0, height), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0, LayoutOrder = nextOrder(self)}, self.Frame)
     corner(c, 12)
@@ -272,31 +252,80 @@ function Tab:AddCard(height)
     return c
 end
 
-function Tab:AddMasterToggle(title, desc, callback)
-    local row = new("TextButton", {Size = UDim2.new(1, 0, 0, 64), BackgroundColor3 = WHITE, BorderSizePixel = 0, Text = "", AutoButtonColor = false, LayoutOrder = nextOrder(self)}, self.Frame)
-    corner(row, 14)
-    local g = new("UIGradient", {Rotation = 0}, row)
-    new("TextLabel", {Size = UDim2.new(1, -80, 0, 22), Position = UDim2.fromOffset(16, 11), BackgroundTransparency = 1, Text = title, Font = Enum.Font.GothamBlack, TextSize = 17, TextColor3 = WHITE, TextXAlignment = Enum.TextXAlignment.Left}, row)
-    local sub = new("TextLabel", {Size = UDim2.new(1, -80, 0, 16), Position = UDim2.fromOffset(16, 34), BackgroundTransparency = 1, Font = Enum.Font.Gotham, TextSize = 12, TextColor3 = Color3.fromRGB(230, 230, 245), TextXAlignment = Enum.TextXAlignment.Left, Text = desc}, row)
-    local power = new("TextLabel", {Size = UDim2.fromOffset(40, 40), Position = UDim2.new(1, -54, 0.5, -20), BackgroundColor3 = Color3.new(0, 0, 0), BackgroundTransparency = 0.7, Text = "⏻", Font = Enum.Font.GothamBold, TextSize = 22, TextColor3 = WHITE}, row)
-    corner(power, 20)
+-- НОВИНКА: Раскрывающийся тумблер по ПКМ (Правая кнопка мыши)
+function Tab:AddExpandableToggle(text, default, callback, buildSettings)
+    local state = default or false
+    local expanded = false
+    
+    -- Главная панель
+    local container = new("Frame", {Size = UDim2.new(1, 0, 0, 48), BackgroundTransparency = 1, LayoutOrder = nextOrder(self)}, self.Frame)
+    
+    local row = new("Frame", {Size = UDim2.new(1, 0, 0, 48), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0}, container)
+    corner(row, 12)
+    stroke(row, THEME.Line, 1, 0.55)
+    
+    local title = new("TextLabel", {Size = UDim2.new(1, -100, 0, 18), Position = UDim2.fromOffset(14, 7), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+    
+    -- Стрелочка для раскрытия
+    local arrow = new("TextLabel", {Size = UDim2.fromOffset(20, 20), Position = UDim2.new(1, -90, 0.5, -10), BackgroundTransparency = 1, Text = "▼", Font = Enum.Font.GothamBold, TextSize = 10, TextColor3 = THEME.SubText, Rotation = 0}, row)
+    
+    local pill = new("TextButton", {Size = UDim2.fromOffset(46, 26), Position = UDim2.new(1, -60, 0.5, -13), Text = "", AutoButtonColor = false, BackgroundColor3 = WHITE}, row)
+    corner(pill, 13)
+    local pg = new("UIGradient", {Rotation = 0}, pill)
+    local knob = new("Frame", {Size = UDim2.fromOffset(20, 20), BackgroundColor3 = WHITE, BorderSizePixel = 0}, pill)
+    corner(knob, 10)
 
-    local state = false
-    local function update()
-        if state then
-            g.Color = ColorSequence.new(THEME.Accent, THEME.Accent2)
-            sub.Text = desc
+    local function render(animate)
+        pg.Color = state and ColorSequence.new(THEME.Accent, THEME.Accent2) or ColorSequence.new(THEME.Off, THEME.Off)
+        local pos = state and UDim2.new(1, -23, 0.5, -10) or UDim2.new(0, 3, 0.5, -10)
+        if animate then tween(knob, 0.18, {Position = pos}) else knob.Position = pos end
+    end
+    render(false)
+
+    pill.MouseButton1Click:Connect(function()
+        state = not state
+        render(true)
+        callback(state)
+    end)
+
+    -- Подменю настроек
+    local settingsFrame = new("Frame", {
+        Size = UDim2.new(1, -20, 0, 0), Position = UDim2.fromOffset(10, 48),
+        BackgroundColor3 = THEME.Panel2, BorderSizePixel = 0, Visible = false,
+    }, container)
+    corner(settingsFrame, 10)
+    local settingsLayout = new("UIListLayout", {Padding = UDim.new(0, 4), SortOrder = Enum.SortOrder.LayoutOrder}, settingsFrame)
+    new("UIPadding", {PaddingTop = UDim.new(0, 6), PaddingBottom = UDim.new(0, 6)}, settingsFrame)
+
+    local function toggleExpand()
+        expanded = not expanded
+        settingsFrame.Visible = expanded
+        tween(arrow, 0.2, {Rotation = expanded and 180 or 0})
+        if expanded then
+            container.Size = UDim2.new(1, 0, 0, 48 + settingsFrame.UIListLayout.AbsoluteContentSize.Y + 12)
         else
-            g.Color = ColorSequence.new(Color3.fromRGB(62, 62, 84), Color3.fromRGB(42, 42, 58))
-            sub.Text = "Выключено"
+            container.Size = UDim2.new(1, 0, 0, 48)
         end
     end
-    update()
-    row.MouseButton1Click:Connect(function()
-        state = not state
-        update()
-        callback(state)
-        self.Owner:Notify(title .. (state and " вкл" or " выкл"))
+
+    -- Клик по стрелке или ПКМ по строке раскрывает меню
+    arrow.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then toggleExpand() end
+    end)
+    row.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton2 then toggleExpand() end
+    end)
+    
+    -- Заполняем подменю элементами
+    if buildSettings then
+        buildSettings(settingsFrame)
+    end
+    
+    -- Авто-обновление размера контейнера, если внутри что-то меняется
+    settingsLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+        if expanded then
+            container.Size = UDim2.new(1, 0, 0, 48 + settingsLayout.AbsoluteContentSize.Y + 12)
+        end
     end)
 end
 
@@ -326,24 +355,31 @@ function Tab:AddToggle(text, default, callback)
     end)
 end
 
-function Tab:AddSlider(text, min, max, default, callback, suffix)
+-- Обновленный слайдер для вложенных меню (с автоматическим LayoutOrder)
+function Tab:AddSlider(text, min, max, default, callback, suffix, parent)
     local val = default or min
     local step = (max - min) / 100
-    local row = new("Frame", {Size = UDim2.new(1, 0, 0, 58), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0, LayoutOrder = nextOrder(self)}, self.Frame)
-    corner(row, 12)
-    stroke(row, THEME.Line, 1, 0.55)
-    new("TextLabel", {Size = UDim2.new(0.6, 0, 0, 20), Position = UDim2.fromOffset(14, 8), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
-    local valBg = new("Frame", {Size = UDim2.fromOffset(74, 22), Position = UDim2.new(1, -88, 0, 7), BackgroundColor3 = THEME.Panel2, BorderSizePixel = 0}, row)
-    corner(valBg, 8)
-    local valText = new("TextLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = THEME.Accent2}, valBg)
-    local track = new("TextButton", {Text = "", AutoButtonColor = false, Size = UDim2.new(1, -28, 0, 6), Position = UDim2.fromOffset(14, 42), BackgroundColor3 = THEME.Off}, row)
+    local row = new("Frame", {Size = UDim2.new(1, -12, 0, 46), BackgroundTransparency = 1, LayoutOrder = 1}, parent or self.Frame)
+    if not parent then
+        row.BackgroundColor3 = THEME.Panel
+        row.Size = UDim2.new(1, 0, 0, 58)
+        corner(row, 12)
+        stroke(row, THEME.Line, 1, 0.55)
+        row.LayoutOrder = nextOrder(self)
+    end
+
+    new("TextLabel", {Size = UDim2.new(0.6, 0, 0, 16), Position = UDim2.fromOffset(8, 4), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 12, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
+    local valBg = new("Frame", {Size = UDim2.fromOffset(60, 18), Position = UDim2.new(1, -68, 0, 4), BackgroundColor3 = THEME.Bg, BorderSizePixel = 0}, row)
+    corner(valBg, 6)
+    local valText = new("TextLabel", {Size = UDim2.fromScale(1, 1), BackgroundTransparency = 1, Font = Enum.Font.GothamBold, TextSize = 11, TextColor3 = THEME.Accent2}, valBg)
+    local track = new("TextButton", {Text = "", AutoButtonColor = false, Size = UDim2.new(1, -16, 0, 6), Position = UDim2.fromOffset(8, 32), BackgroundColor3 = THEME.Off}, row)
     corner(track, 3)
     local fill = new("Frame", {BackgroundColor3 = WHITE, BorderSizePixel = 0}, track)
     corner(fill, 3)
     gradient(fill, THEME.Accent, THEME.Accent2, 0)
-    local knob = new("Frame", {Size = UDim2.fromOffset(16, 16), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3}, track)
-    corner(knob, 8)
-    stroke(knob, THEME.Accent, 2.5, 0)
+    local knob = new("Frame", {Size = UDim2.fromOffset(14, 14), AnchorPoint = Vector2.new(0.5, 0.5), BackgroundColor3 = WHITE, BorderSizePixel = 0, ZIndex = 3}, track)
+    corner(knob, 7)
+    stroke(knob, THEME.Accent, 2, 0)
 
     local function fmt(v) return tostring(math.floor(v * 1000 + 0.5) / 1000) end
     local function render()
@@ -363,8 +399,8 @@ function Tab:AddSlider(text, min, max, default, callback, suffix)
     end
     track.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            tween(knob, 0.12, {Size = UDim2.fromOffset(20, 20)})
-            activeSlider = {move = setFromX, done = function() tween(knob, 0.12, {Size = UDim2.fromOffset(16, 16)}) end}
+            tween(knob, 0.12, {Size = UDim2.fromOffset(18, 18)})
+            activeSlider = {move = setFromX, done = function() tween(knob, 0.12, {Size = UDim2.fromOffset(14, 14)}) end}
             setFromX(input.Position.X)
         end
     end)
@@ -377,25 +413,49 @@ function Tab:AddSlider(text, min, max, default, callback, suffix)
     render()
 end
 
-function Tab:AddColorPicker(text, default, callback)
+function Tab:AddColorPicker(text, default, callback, parent)
     local currentColor = default or Color3.fromRGB(255, 50, 50)
-    local SWATCHES = {Color3.fromRGB(255, 50, 50), Color3.fromRGB(255, 150, 40), Color3.fromRGB(255, 225, 60), Color3.fromRGB(50, 255, 50), Color3.fromRGB(50, 220, 255), Color3.fromRGB(80, 120, 255), Color3.fromRGB(170, 90, 255), Color3.fromRGB(255, 90, 200)}
-    local row = new("Frame", {Size = UDim2.new(1, 0, 0, 62), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0, LayoutOrder = nextOrder(self)}, self.Frame)
-    corner(row, 12)
-    stroke(row, THEME.Line, 1, 0.55)
+    local SWATCHES = {Color3.fromRGB(255, 50, 50), Color3.fromRGB(255, 150, 40), Color3.fromRGB(255, 225, 60), Color3.fromRGB(50, 255, 50), Color3.fromRGB(50, 220, 255), Color3.fromRGB(80, 120, 255), Color3.fromRGB(170, 90, 255), Color3.fromRGB(255, 90, 200), "Rainbow"}
+    
+    local row = new("Frame", {Size = UDim2.new(1, 0, 0, 62), BackgroundColor3 = THEME.Panel, BorderSizePixel = 0, LayoutOrder = nextOrder(self)}, parent or self.Frame)
+    if not parent then
+        corner(row, 12)
+        stroke(row, THEME.Line, 1, 0.55)
+    else
+        row.BackgroundColor3 = THEME.Panel2
+    end
+    
     new("TextLabel", {Size = UDim2.new(1, -28, 0, 20), Position = UDim2.fromOffset(14, 8), BackgroundTransparency = 1, Text = text, Font = Enum.Font.GothamBold, TextSize = 13, TextColor3 = THEME.Text, TextXAlignment = Enum.TextXAlignment.Left}, row)
     local holder = new("Frame", {Size = UDim2.new(1, -28, 0, 24), Position = UDim2.fromOffset(14, 31), BackgroundTransparency = 1}, row)
     new("UIListLayout", {FillDirection = Enum.FillDirection.Horizontal, Padding = UDim.new(0, 8), SortOrder = Enum.SortOrder.LayoutOrder}, holder)
 
     local list = {}
     for i, c in ipairs(SWATCHES) do
-        local b = new("TextButton", {Size = UDim2.fromOffset(24, 24), BackgroundColor3 = c, Text = "", AutoButtonColor = false, LayoutOrder = i}, holder)
-        corner(b, 12)
-        local st = stroke(b, WHITE, 2, currentColor == c and 0 or 1)
+        local b = new("TextButton", {Size = UDim2.fromOffset(22, 22), BackgroundColor3 = (c == "Rainbow" and WHITE or c), Text = "", AutoButtonColor = false, LayoutOrder = i}, holder)
+        corner(b, 11)
+        
+        if c == "Rainbow" then
+            -- Радиальный градиент для радуги
+            local grad = Instance.new("UIGradient", b)
+            grad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(255,0,0)),
+                ColorSequenceKeypoint.new(0.2, Color3.fromRGB(255,255,0)),
+                ColorSequenceKeypoint.new(0.4, Color3.fromRGB(0,255,0)),
+                ColorSequenceKeypoint.new(0.6, Color3.fromRGB(0,255,255)),
+                ColorSequenceKeypoint.new(0.8, Color3.fromRGB(0,0,255)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(255,0,255))
+            })
+        end
+        
+        local isSelected = (c == "Rainbow" and currentColor == "Rainbow") or (typeof(c) == "Color3" and currentColor == c)
+        local st = stroke(b, WHITE, 2, isSelected and 0 or 1)
         list[i] = {st = st, color = c}
+        
         b.MouseButton1Click:Connect(function()
             currentColor = c
-            for _, it in ipairs(list) do tween(it.st, 0.15, {Transparency = (it.color == c) and 0 or 1}) end
+            for _, it in ipairs(list) do 
+                tween(it.st, 0.15, {Transparency = (it.color == c) and 0 or 1}) 
+            end
             callback(c)
         end)
     end
