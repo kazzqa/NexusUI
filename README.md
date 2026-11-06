@@ -4,31 +4,30 @@ NexusUI is a fully customizable, purely visual UI library for Roblox. It does no
 
 Inspired by modern libraries like Rayfield and Fluent.
 
-# 🔗 Library Link
+## 🔗 Library Link
 
 **Raw Link (for scripts):**
 ```text
 https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua
 ```
 
+**Ready-to-use Loadstring:**
+```lua
+local NexusUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua"))()
+```
+
+---
+
 ## 🛠 Installation
 
 1. Create a new file in your script editor (e.g., `NexusUI.lua`).
 2. Paste the NexusUI source code.
 3. Upload it to GitHub (or any raw text hosting service).
-4. Get the **Raw URL** of your file (e.g., `https://raw.githubusercontent.com/username/repo/main/NexusUI.lua`).
+4. Get the **Raw URL** of your file.
 
 ## 📖 Quick Start
 
-To load the library into your script, use:
-
-```lua
-local NexusUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/kazzqa/NexusUI/refs/heads/main/NexusUI.lua"))()
-```
-
-## 🧩 UI Components
-
-### 1. Creating a Window
+To load the library into your script, use the loadstring above and create your first window:
 
 ```lua
 local Window = NexusUI:CreateWindow({
@@ -36,23 +35,27 @@ local Window = NexusUI:CreateWindow({
     SubTitle = "visuals • combat • misc",
     Icon = "⚔",
     ToggleKey = Enum.KeyCode.RightShift,
-    Size = UDim2.fromOffset(340, 450)
+    Size = UDim2.fromOffset(440, 480) -- Optional
 })
 ```
 
-### 2. Creating Tabs
+## 🧩 UI Components
+
+### 1. Creating Tabs
+The library automatically adjusts the width and position of tabs based on how many you add.
 
 ```lua
-local TabCombat = Window:AddTab("⚔ COMBAT")
-local TabVisuals = Window:AddTab("👁 VISUALS")
+local TabCombat = Window:AddTab("⚔ Combat")
+local TabVisuals = Window:AddTab("👁 Visuals")
+local TabSettings = Window:AddTab("⚙ Settings")
 ```
 
-### 3. Adding Elements
+### 2. Adding Elements
 
-**Master Toggle:**
+**Master Toggle (Big Button):**
 ```lua
-TabCombat:AddMasterToggle("MAIN FEATURE", "Description", function(state)
-    print("State:", state)
+TabCombat:AddMasterToggle("MAIN FEATURE", "Active state", function(state)
+    print("Master toggle:", state)
 end)
 ```
 
@@ -61,14 +64,7 @@ end)
 TabCombat:AddSection("SETTINGS")
 ```
 
-**Button:**
-```lua
-TabCombat:AddButton("Click Me", function()
-    Window:Notify("Clicked!")
-end)
-```
-
-**Toggle:**
+**Standard Toggle:**
 ```lua
 TabCombat:AddToggle("Wall Check", true, function(state)
     print("Wall check:", state)
@@ -82,14 +78,37 @@ TabCombat:AddSlider("Range", 1, 50, 15, function(value)
 end, " studs")
 ```
 
-**Color Picker:**
+**Color Picker (with Rainbow Mode):**
+Includes a built-in rainbow gradient option. If the user selects it, the callback returns the string `"Rainbow"`.
 ```lua
 TabVisuals:AddColorPicker("Enemy Color", Color3.fromRGB(255, 50, 50), function(color)
-    print("Color:", color)
+    if color == "Rainbow" then
+        print("Rainbow mode enabled!")
+    else
+        print("Color:", color)
+    end
 end)
 ```
 
-**Universal Player List:**
+### 3. 🆕 Expandable Settings (Right-Click Menu)
+You can create a toggle that reveals hidden sub-settings when the user **Right-Clicks** on it or clicks the arrow `▼`. 
+
+To put elements inside the sub-menu, just pass the `parent` variable (provided by the `buildSettings` function) as the last argument to your Sliders or ColorPickers.
+
+```lua
+TabVisuals:AddExpandableToggle("Skeleton ESP", false, function(state)
+    print("Skeleton:", state)
+end, function(parent)
+    -- These elements will appear inside the expandable menu!
+    TabVisuals:AddSlider("Thickness", 1, 5, 2, function(val)
+        print("Thickness:", val)
+    end, " px", parent) 
+end)
+```
+
+### 4. Universal Player List
+A smart component for Whitelists, Blacklists, or targeting. It handles avatars and dynamic updates.
+
 ```lua
 local function getPlayers()
     local list = {}
@@ -99,9 +118,9 @@ local function getPlayers()
     return list
 end
 
-local PlayerList = TabVisuals:AddPlayerList(
+local PlayerList = TabSettings:AddPlayerList(
     getPlayers, 
-    function(player) return false end, -- Is Selected?
+    function(player) return false end, -- Is Selected? (e.g., return isBlacklisted(player))
     function(player, isSelected)
         Window:Notify(player.Name .. (isSelected and " selected" or " unselected"))
     end
